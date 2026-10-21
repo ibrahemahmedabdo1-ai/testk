@@ -1,0 +1,56 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android platform files
+        run: |
+          mkdir -p /tmp/app_backup
+          cp -r lib pubspec.yaml /tmp/app_backup/
+          flutter create . --platforms=android --org com.sari3.delivery --project-name delivery_app
+          rm -rf lib && cp -r /tmp/app_backup/lib ./lib
+          cp /tmp/app_backup/pubspec.yaml ./pubspec.yaml
+          rm -rf test
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-app-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: APK build ${{ github.run_number }}
+          files: build/app/outputs/flutter-apk/app-release.apk
